@@ -1,8 +1,7 @@
-import React from "react"
 import { Menu } from "antd"
 import Link from 'next/link'
 import {
-    UserOutlined,
+    WarningOutlined,
     VideoCameraOutlined,
     UploadOutlined,
 } from '@ant-design/icons'
@@ -15,14 +14,15 @@ const SiteMenu = () => {
                 <Link href={'/'}>
                     Home
                 </Link>
-            </Menu.Item><Menu.Item key="2" icon={<VideoCameraOutlined />}>
+            </Menu.Item>
+            <Menu.Item key="2" icon={<VideoCameraOutlined />}>
                 <Link href={'/receipt-list'}>
                 Receipt List
                 </Link>
             </Menu.Item>
-            <Menu.Item key="3" icon={<UserOutlined />}>
-                <Link href={'/about'}>
-                    About
+            <Menu.Item key="3" icon={<WarningOutlined />}>
+                <Link href={'/logs'}>
+                    Logs
                 </Link>
             </Menu.Item>
         </Menu>

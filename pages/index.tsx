@@ -1,14 +1,26 @@
 import React, { useState } from 'react'
-import { Upload, message, Row, Col, Button } from 'antd'
+import { Upload, message, Row, Col, Button, Table, notification } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
-import { UploadFile } from 'antd/lib/upload/interface'
+import app from '../helpers/firebase';
+import ReceiptList from './receipt-list';
+import { Receipt } from '../models/models';
+import moment from 'moment';
+
+const firestore = app.firestore();
+const storage = app.storage();
 
 const Home = () => {
-  const [files, setFiles] = useState([] as UploadFile[]);
-  const [uploading, setUploading] = useState(false);
-  const [isBeforeUpload, setIsBeforeUpload] = useState(true);
+  const receiptsRef = firestore.collection('receipts');
 
-  const onRemove = (file: UploadFile) => {
+  const [files, setFiles] = useState([] as any);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [recordCount, setRecordCount] = useState(0);
+
+  const [addedRecords, setAddedRecords] = useState([] as any);
+
+  const onRemove = (file: any) => {
     const index = files.indexOf(file);
     const newFileList = files.slice();
     newFileList.splice(index, 1);
@@ -17,30 +29,147 @@ const Home = () => {
 
   const removeAllFiles = () => {
     setFiles([]);
+    setAddedRecords([]);
+    setRecordCount(0);
   }
 
-  const beforeUpload = (file: UploadFile, fileList: UploadFile[]) => {    
-    const eligibleFiles = [] as UploadFile[];
-    for(var i = 0; i < fileList.length ; i++){
-      if (fileList[i].type !== 'image/jpeg' && fileList[i].type !== 'image/png') {
-        message.error(`${file.name} is not eligible for uploading!`)
+  const beforeUpload = (file: any, fileList: any) => {
+    if(file === fileList[0]){
+      const eligibleFiles = [] as any;
+      for (var i = 0; i < fileList.length; i++) {
+        if (fileList[i].type !== 'image/jpeg' && fileList[i].type !== 'image/png') {
+          message.error(`${fileList[i].name} is not eligible for uploading!`)
+        }
+        else {
+          if (files.map((p: any) => p.name).includes(file.name)) {
+            message.warning(`A file named as'${fileList[i].name}' is already added!`)
+          }
+          else {
+            eligibleFiles.push(fileList[i]);
+          }
+        }
       }
-      else{
-        eligibleFiles.push(fileList[i]);
-      }
+      const newFileList = [...eligibleFiles, ...files];
+      setFiles(newFileList);
     }
-    const newFileList = [...eligibleFiles, ...files];
-    setFiles(newFileList);
     return false;
   }
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
+
     setUploading(true);
-    setTimeout(function () {
-      setUploading(false)
-    }, 5000);
+    let index = 0;
+    const templateRecords = [] as any;
+    for (const file of files) {
+      index++;
+      const image = file;
+      console.log('1-image', image)
+      const imgUrl = await uploadImage(image);
+      console.log('2-imgUrl', imgUrl)
+      const receiptData = await processImage(imgUrl);
+      console.log('3-receiptData', receiptData)
+      const record = await saveAsTemplateToFirebase(receiptData, imgUrl);
+      templateRecords.push(record);
+      console.log('templateRecords', templateRecords)
+      console.log('finish')
+    }
+    setAddedRecords(templateRecords);
+    setRecordCount(index);
+    setUploading(false);
+
   }
 
+  const uploadImage = async (image: any) => {
+    return new Promise<string>(function(resolve, reject) {
+      const uploadTask = storage.ref(`images/${image.name}`).put(image);
+      uploadTask.on('state_changed',
+          snapshot => { },
+          error => {
+            console.log('Error:', error);
+            reject()
+          },
+          () => {
+            storage
+              .ref('images')
+              .child(image.name)
+              .getDownloadURL()
+              .then((url: string) => {
+                resolve(url);
+              })
+          }
+      )
+    })
+  }
+
+  const processImage = async (imageUrl: string) => {
+    const requestOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({ fileUrl: imageUrl }),
+
+    };
+    const response = await fetch('https://karraentegra.herokuapp.com/http://receipt-scanning-api.demos.arfitect.net/api/v1/receipt-scanner/ScanFileByUrl', requestOptions);
+    const data = await response.json();
+    return data.receiptData;
+  }
+
+  const saveAsTemplateToFirebase = async (receiptData: any, imageUrl: string) => {
+    const receipt: Receipt = {
+      imageUrl: imageUrl,
+      documentNumber: receiptData.documentNumber,
+      issueDate: receiptData.date,
+      processDate: moment().format('DD.MM.YYYY'),
+      supplier: receiptData.contact,
+      vatAmount: receiptData.totalTax,
+      totalAmount: receiptData.total,
+      createdAt: moment().toDate(),
+      isTemplate: true
+    };
+    try {
+      const addedRecord = await receiptsRef.add(receipt);
+      return addedRecord;
+    }
+    catch (error) {
+      console.error("Error creating receipt: ", error);
+    }
+  }
+
+  const saveAll = async () => {
+    setSaving(true);
+    addedRecords.forEach(async (record: any) => {
+      try {
+        const documentRef = receiptsRef.doc(record.id);
+        await documentRef.update({ isTemplate: false });
+      }
+      catch (error) {
+        console.error("Error updating receipt: ", error);
+      }
+    });
+    notification.success({
+      message: 'Documents successfully saved!',
+      placement: 'topRight'
+    })
+    removeAllFiles();
+    setSaving(false);
+  }
+
+  const cancel = async () => {
+    addedRecords.forEach(async (record: any) => {
+      try {
+        const documentRef = receiptsRef.doc(record.id);
+        await documentRef.delete();
+      }
+      catch (error) {
+        console.error("Error deleting receipt: ", error);
+      }
+    });
+    removeAllFiles();
+  }
+
+  
   return (
     <>
       <Row>
@@ -82,10 +211,38 @@ const Home = () => {
             loading={uploading}
             style={{ marginTop: 16, float: 'right' }}
           >
-            {uploading ? 'Uploading' : 'Start Upload'}
+            {uploading ? 'Processing' : 'Start Upload'}
           </Button>
         </Col>
         <Col span={12} />
+      </Row>
+      <Row>
+        <Col span={24}>
+          <ReceiptList recordCount={recordCount} isTemplates={true} />
+        </Col>
+      </Row>
+      <Row>
+        <Col offset={20} span={2}>
+          <Button
+            type={'primary'}
+            danger
+            onClick={cancel}
+            style={{ marginTop: 16, float: 'right' }}
+          >
+            {'Cancel'}
+          </Button>
+        </Col>
+        <Col span={2}>
+          <Button
+            type={'primary'}
+            onClick={saveAll}
+            disabled={files.length === 0 || uploading}
+            loading={saving}
+            style={{ marginTop: 16, float: 'right', background: '#178566', borderColor: '#52c41a' }}
+          >
+            {'Save All'}
+          </Button>
+        </Col>
       </Row>
     </>
   )

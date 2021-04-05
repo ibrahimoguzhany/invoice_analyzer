@@ -5,7 +5,7 @@ import {
     MenuFoldOutlined
 } from '@ant-design/icons'
 import styles from './layout.module.css'
-import SRMenu from './sitemenu'
+import SiteMenu from './sitemenu'
 import Link from 'next/link';
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -25,27 +25,18 @@ const SiteLayout = ({
     return (
         <Layout style={{ height: "100vh", overflow: "auto"}}>
             <Sider trigger={null} collapsible collapsed={collapsed}>
-                    <div className={styles.logo} >
-                        <Image
-                            preview={false}
-                            className={styles['logo-img']}
-                            width={!collapsed ? 110 : 60}
-                            height={!collapsed ? 60 : 40}
-                            src="/images/arf-logo.png"
-                        />
-                    </div>
-                {/* <Link href={'/'}>
-                    <div className={styles.logo} >
-                        <Image
-                            preview={false}
-                            className={styles['logo-img']}
-                            width={!collapsed ? 110 : 60}
-                            height={!collapsed ? 60 : 40}
-                            src="/images/arf-logo.png"
-                        />
-                    </div>
-                </Link> */}
-                <SRMenu />
+                    <Link href={'/'}  >
+                        <div className={styles.logo}>
+                            <Image
+                                preview={false}
+                                className={styles['logo-img']}
+                                width={!collapsed ? 110 : 60}
+                                height={!collapsed ? 60 : 40}
+                                src="/images/arf-logo.png"
+                            />
+                        </div>
+                    </Link>
+                <SiteMenu />
             </Sider>
             <Layout className={styles["site-layout"]}>
                 <Header className={styles["site-layout-background"]} style={{ padding: 0 }}>
@@ -66,7 +57,8 @@ const SiteLayout = ({
                     style={{
                         margin: '24px 16px',
                         padding: 24,
-                        backgroundColor: '#fff'
+                        backgroundColor: '#fff',
+                        overflow: "auto"
                     }}
                 >
                    {children}
